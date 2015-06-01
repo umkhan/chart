@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+
+.axis {
+  fill: none;
+  stroke: #000;
+}
+.chart div {
+  font: 10px sans-serif;
+  background-color: steelblue;
+  text-align: right;
+  padding: 3px;
+  margin: 1px;
+  color: white;
+}
+
+</style>
+<!--<div class="chart"></div>-->
+<body></body>
+<!--<script src="http://d3js.org/d3.v3.min.js"></script>-->
+<script src="d3.js"></script>
+<script>
+(function() {
+d3.legend = function(g) {
+g.each(function() {
+var g= d3.select(this),
+    items = {},
+    svg = d3.select(g.property("nearestViewportElement")),
+    legendPadding = g.attr("data-style-padding") || 5,
+    lb = g.selectAll(".legend-box").data([true]),
+    li = g.selectAll(".legend-items").data([true])
+
+lb.enter().append("rect").classed("legend-box",true)
+li.enter().append("g").classed("legend-items",true)
+
+svg.selectAll("[data-legend]").each(function() {
+    var self = d3.select(this)
+    items[self.attr("data-legend")] = {
+      pos : self.attr("data-legend-pos") || this.getBBox().y,
+      color : self.attr("data-legend-color") != undefined ? self.attr("data-legend-color") : self.style("fill") != 'none' ? self.style("fill") : self.style("stroke")
+    }
+  })
+
+items = d3.entries(items).sort(function(a,b) { return a.value.pos-b.value.pos})
+
+
+li.selectAll("text")
+    .data(items,function(d) { return d.key})
+    .call(function(d) { d.enter().append("text")})
+    .call(function(d) { d.exit().remove()})
+    .attr("y",function(d,i) { return i+"em"})
+    .attr("x","1em")
+    .text(function(d) { ;return d.key})
+
+li.selectAll("circle")
+    .data(items,function(d) { return d.key})
+    .call(function(d) { d.enter().append("circle")})
+    .call(function(d) { d.exit().remove()})
+    .attr("cy",function(d,i) { return i-0.25+"em"})
+    .attr("cx",0)
+    .attr("r","0.4em")
+    .style("fill",function(d) { console.log(d.value.color);return d.value.color})
+
+// Reposition and resize the box
+var lbbox = li[0][0].getBBox()
+lb.attr("x",(lbbox.x-legendPadding))
+    .attr("y",(lbbox.y-legendPadding))
+    .attr("height",(lbbox.height+2*legendPadding))
+    .attr("width",(lbbox.width+2*legendPadding))
+})
+return g
+}
+})()
+
+
+var testdata=[
+  [{volume:8, color:'blue'},
+   {volume:15, color:'green'},
+   {volume:16, color:'purple'},
+   {volume:23, color:'blue'}],
+  [{volume:42, color:'white'},
+   {volume:22, color:'red'},
+   {volume:5, color:'black'},
+   {volume:10, color:'yellow'},
+   {volume:15, color:'orange'},
+   {volume:6, color:'blue'}],
+  [{volume:22, color:'pink'},
+   {volume:4, color:'red'}]]
+
+var testdict=[ {org: 1, color:'blue'},
+	       {org:2, color:'green'},
+	       {org:3, color:'yellow'},
+               {org:1, color:'red'}]
+
+
+
+var makelist = function(dictlist) {
+  var final={}
+  for(var i=0; i< dictlist.length; i++){
+    var row = dictlist[i]
+    row.orgid = parseInt(row.orgid);
+    row.twomonths = parseFloat(row.twomonths);
+    row.lastmonth = parseFloat(row.lastmonth);
+    row.thismonth = parseFloat(row.thismonth);
+    row.MAU = parseFloat(row.MAU);
+    var label = dictlist[i].orgid
+    if(final[label])
+      final[label].push(dictlist[i])
+    else
+      final[label]=[dictlist[i]]
+  }
+  var output = [];
+  for (var key in final) {
+   output.push({org: key, orgname: final[key][0].orgname, apps: final[key]});
+  }
+  return output
+}
+ 
+
+var make_graph = function(data) {
+  var max_mau = 0;
+  for(var i = 0; i < data.length; i++) {
+    var acc = 0;
+    var apps = data[i].apps;
+    for(var j = 0; j < apps.length; j++){
+      ylower = acc;
+      yupper =  acc + parseFloat(apps[j].twomonths);
+      apps[j].ylower = ylower;
+      apps[j].yupper = yupper;
+      acc = yupper;
+
+      if(apps[j].MAU > max_mau) {
+         max_mau = apps[j].MAU;
+      }
+
+     }
+  data[i].volume = acc
+  }
+data.sort(function(a, b) { return b.volume - a.volume; });
+data2 =[];
+for (var i = 0; i < 50; i++) {
+  data2.push(data[i]);
+}
+
+data = data2;
+
+
+mautocolor = function(d, mau) {
+  var x =1- Math.pow(parseFloat(mau)/max_mau, .38);
+  var r = Math.floor(x*255/1.3);
+  var b = Math.floor(x*255);
+  var g = 0;
+  var color = ["rgb(",r,",",g,",",b,")"].join("");
+ return color;
+} 
+  //console.log('data: ', data)
+  
+  max_val = d3.max(data, function(d) { return d3.max(d.apps, 
+     function(dict){return dict.yupper});
+   });
+
+  var svg_height = window.innerHeight;
+
+
+  var y = d3.scale.linear()
+    .rangeRound([svg_height, 0]);
+ 
+  y.domain([0, max_val]);
+//console.log(max_val)
+  var yAxis = d3.svg.axis()
+    .scale(y)
+    .orient("left")
+    .tickFormat(d3.format(".2"));
+  
+
+  var label_height = 200;
+  var bar_base = label_height + 10; 
+  
+  var xscale = d3.scale.linear()
+      .domain([0, max_val])
+      .range([0, svg_height - bar_base]);
+  
+  var bar_width = 22;
+  var graph_width = bar_width * data.length;
+  var svg = d3.select("body").append("svg")
+    .attr("width", graph_width)
+    .attr("height", svg_height)
+  
+  var magic = 42;
+  svg.append("g")
+    .attr("class", "axis")
+    .call(yAxis)
+    //.style("stroke", "#000")
+    //.style("fill", "none")
+    .attr("transform", "translate("+magic+", 0)")
+ 
+  svg.append("text") 
+	.attr("transform", "rotate(-90)")
+	.attr("y", 26)
+	.text("Events in Millions")
+
+ 
+  var orgs = svg.selectAll(".org")
+    .data(data)
+    .enter().append("g")
+    .attr("transform", function(d, i) { return "translate(" + (magic+8+i*(bar_width + 2)) + "," + svg_height+")"
+; });
+
+  orgs
+    .append("text")
+    .text(function(d) {return d.orgname})
+    .attr("transform", "rotate (-90)")
+       .style("text-anchor", "end")
+    .attr("dx", function(d) {return label_height+"px"})
+    .attr("dy", bar_width-6+"px")
+  
+  orgs.selectAll("rect")
+      .data(function(d) { return d.apps })
+      .enter().append("rect")
+      .attr("width", bar_width)
+      .attr("y", function(d) {
+        var y = - xscale(d.yupper) - bar_base;
+        return y })
+      .style("fill", function(d) { return mautocolor(d, d.MAU) })
+      .attr("height", function(d, i) {
+         return Math.max(0, xscale(d.yupper - d.ylower) - 1);
+      })
+      ;
+      //.text(function(d) { return d; });
+ 
+   var page_width = document.innerWidth;
+
+   var legend = svg.selectAll(".legend")
+	.data([1,2,3,4,5]).enter().append("g")
+	.style("fill", function(d) {return mautocolor(d, 2000000)})
+	.attr("class", "legend")
+	.attr("x", page_width -22)
+	.attr("width", 2) 
+	.call(d3.legend)
+}
+
+
+d3.csv('counts.csv', function(mydata) {
+  var mmmmax = d3.max(mydata, function(d) { return d.MAU });
+  byorg = makelist(mydata)
+  make_graph(byorg)
+})
+
+
+</script>
